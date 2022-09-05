@@ -55,7 +55,7 @@ contract Web3RSVP {
         // look up event from our mapping
         CreateEvent storage myEvent = idToEvent[eventId];
 
-        // transfer deposit to out contract / require that they send in enough ETH to cover
+        // transfer deposit to out contract / require that they send in enough ETH to cover the deposit rewuirement of this specific
         require(msg.value == myEvent.deposit, "NOT ENOUGH");
 
         // require that the event hasn't already happend (<eventTimestamp)
@@ -73,5 +73,46 @@ contract Web3RSVP {
         }
 
         myEvent.confirmedRSVPs.push(payable(msg.sender));
+    }
+
+    function confirmAttendee(bytes32 eventId, address attendee) public {
+        // look up event from our struct using the eventId
+        CreateEvent storage myEvent = idToEvent[eventId];
+
+        // require that msg.sender is the owner of the event - only the host should be able to check people in
+        require(msg.sender == myEvent.eventOwner, "NOT AUTHORIZED");
+
+        // rewuire that attendee trying to check in actually RSVP'd
+        address rsvpConfirm;
+
+        for (uint8 i = 0; i < myEvent.confirmedRSVPs.length; i++) {
+            if(myEvent.confirmedRSVPs[i] == attendee){
+                rsvpConfirm = myEvent.confirmedRSVPs[i];
+            }
+        }
+
+        require(rsvpConfirm == attendee, "NO RSVP TO CONFIRM");
+
+
+        // require that attendee is NOT already in the claimedRSVPs list AKA make sure they haven't already checked in
+        for (uint8 i =0; i < myEvent.claimedRSVPs.length; i++) {
+            require(myEvent.claimedRSVPs[i] != attendee, "ALREADY CLAIMED");
+        }
+
+        // require that deposits are not already claimed by the event owner
+        require(myEvent.paidOut == false, "ALREADY PAID OUT");
+
+        // add the attendee to the claimedRSVPs list
+        myEvent.claimedRSVPs.push(attendee);
+
+        // sending eth back to the staker `https://solidity-by-example.org/sending-ether`
+        (bool sent,) = attendee.call{value: myEvent.deposit}("");
+
+        // if this fails, remove the user from the array of claimed RSVPs
+        if (!sent) {
+            myEvent.claimedRSVPs.pop();
+        }
+
+        require(sent, "Failed to send Ether");
     }
 }
